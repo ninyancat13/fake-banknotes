@@ -5,11 +5,16 @@ date: "07/09/2019"
 output: rmarkdown::github_document
 ---
 
+```{r}
+# rmarkdown::word_document
+```
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Loading the data
+# 1. Loading the data
 
 ```{r}
 df = read.table("data_banknote_authentication.txt",
@@ -19,7 +24,7 @@ df = read.table("data_banknote_authentication.txt",
                   strip.white=TRUE)
 ```
 
-# Data Wrangling
+# 2. Data Wrangling
 
 ```{r}
 head(df)
@@ -30,8 +35,8 @@ summary(df)
 ```
 
 ```{r}
-library(dlookr)
-describe_data = describe(df)
+#library(dlookr)
+#describe_data = describe(df)
 ```
 
 ```{r}
@@ -42,53 +47,94 @@ df$class <- as.factor(df$class); str(df)
 levels(df$class) <- c("Fake", "Real"); str(df)
 ```
 
-# EDA on Data
+# 3. EDA on Data
 
 ```{r}
-boxplot(df)
+# library(RColorBrewer)
+# boxplot(df[,1:4], ylab='Values', main='Overview of BankNote Dataset', col=c(brewer.pal(4, "Spectral")))
 ```
 
 ```{r}
-hist(df)
+library(DescTools)
+plot(Desc(df)) 
 ```
+
+```{r}
+features = df[,1:4]
+outcome = df[,5]
+
+library(ggplot2)
+library(GGally)
+
+ggpairs(features, aes(colour = df$class, alpha = 0.4))
+```
+
+```{r}
+plot(df)
+```
+
 
 ```{r}
 library(DataExplorer)
 ```
 
-# Attempt to Split (?) - ask Ritu for confirmation
+# 4. Making TRAINING and TESTING subsets
 
 ```{r}
-# set.seed(7)
-# ss <- sample(1:3,size=nrow(df),replace=TRUE,prob=c(0.333,0.333,0.333))
-# sample1 <- df[ss==1,]
-# sample2 <- df[ss==2,]
-# sample3 <- df[ss==3,]
+make_train = function(seed_no){
+  set.seed(seed_no)
+  testIdx <- sample(1:nrow(df),floor(nrow(df)*0.2))
+  training <- df[-testIdx,]
+  return (training)
+}
 ```
+
 
 ```{r}
-# str(sample1)
-# str(sample2)
-# str(sample3)
+make_test = function(seed_no){
+  set.seed(seed_no)
+  testIdx <- sample(1:nrow(df),floor(nrow(df)*0.2))
+  testing <- df[testIdx,]
+  return (testing)
+}
 ```
+
 
 ```{r}
-# sample_size <- nrow(df)
-# set_proportions <- c(Training = 0.33, Validation = 0.33, Test = 0.33)
-# set_frequencies <- diff(floor(sample_size * cumsum(c(0, set_proportions))))
-# df$set <- sample(rep(names(set_proportions), times = set_frequencies))
+train1 = make_train(79)
+test1 = make_test(79)
+
+train2 = make_train(8)
+test2 = make_test(8)
+
+train3 = make_train(19)
+test3 = make_test(19)
+
+train4 = make_train(23)
+test4 = make_test(23)
+
+train5 = make_train(32)
+test5 = make_test(32)
+
+train6 = make_train(75)
+test6 = make_test(75)
+
+train7 = make_train(102)
+test7 = make_test(102)
+
+train8 = make_train(421)
+test8 = make_test(421)
+
+train9 = make_train(792)
+test9 = make_test(792)
+
+train10 = make_train(1)
+test10 = make_test(1)
 ```
 
-# SPLIT INTO TEST AND TRAINING
 
-```{r}
-set.seed(1234)
-TestIndex = sample((nrow(df)), floor(0.15*nrow(df)))
-testing <- df[TestIndex,]
-training <- df[-TestIndex,]; str(training)
-```
 
-# MACHINE LEARNING ALGORITHMS
+# 5. MACHINE LEARNING ALGORITHMS
 
 ## TREATMENT: Level 1 Logistic Regression
 
@@ -97,161 +143,323 @@ library(pROC)
 ```
 
 ```{r}
-glm = glm(class ~ . , data = training, family = binomial(link="logit"))
-summary(glm)
+logreg = function(training, testing){
+  glm = glm(class ~ . , data = training, family = binomial(link="logit"))
+  # summary(glm)
+  pred.glm = predict(glm, newdata=testing, type='response')
+  pred.glmclass = rep("Fake", length(pred.glm))
+  pred.glmclass[pred.glm>0.5] = "Real"
+  # table(pred.glmclass, test1$class, dnn=c("Predictions","Actual"))
+  tn = table(pred.glmclass, testing$class, dnn=c("Predictions","Actual"))[1,1]
+  tp = table(pred.glmclass, testing$class, dnn=c("Predictions","Actual"))[2,2]
+  accuracy = (tn + tp)/nrow(testing)
+  return (accuracy)
+}
 ```
+
 
 ```{r}
-pred.glm = predict(glm, newdata=testing, type='response')
-pred.glmclass = rep("Fake", length(pred.glm))
-pred.glmclass[pred.glm>0.5] = "Real"
+logreg_df = data.frame(accuracy = c(logreg(train1, test1), logreg(train2, test2), logreg(train3, test3), logreg(train4, test4), logreg(train5, test5), logreg(train6, test6), logreg(train7, test7), logreg(train8, test8), logreg(train9, test9), logreg(train10, test10)),
+           ml_algorithm = rep("logReg", 10))
 
-table(pred.glmclass, testing$class, dnn=c("Predictions","Actual"))
+logreg_df
 ```
-
-```{r}
-# Probability of success???? 0.9854
-(117+85)/(117+85+3)
-```
-
-**Logistic Regression** probability of success is 0.9853
 
 ```{r}
 par(pty='s')
-plot(roc(testing$class, pred.glm), legacy.axes=TRUE)
+glm = glm(class ~ . , data = train1, family = binomial(link="logit"))
+pred.glm = predict(glm, newdata=test1, type='response')
+plot(roc(test1$class, pred.glm), legacy.axes=TRUE)
 ```
 
 
-## TREATMENT: Level 2 Linar Discriminant Analysis
+## TREATMENT: Level 2 Linear Discriminant Analysis
 
-*insert codes here*
+```{r}
+library(MASS)
+ldareg <- function(training, testing){
+  lda_fit = lda(class ~ . , data=training)
+  lda_pred = predict(lda_fit, newdata=testing)
+  accuracy = sum(table(testing$class, lda_pred$class)[1,1],table(testing$class, lda_pred$class)[2,2])/nrow(testing)
+  return(accuracy)
+}
+```
+
+```{r}
+lda_df = data.frame(accuracy = c(ldareg(train1, test1), ldareg(train2, test2), ldareg(train3, test3), ldareg(train4, test4), ldareg(train5, test5), ldareg(train6, test6), ldareg(train7, test7), ldareg(train8, test8), ldareg(train9, test9), ldareg(train10, test10)), 
+           ml_algorithm = rep("LDA",5))
+
+lda_df
+```
 
 
 ## TREATMENT: Level 3 Classification and Regression Trees
 
-```{r fig.height=2, fig.width=3}
+```{r fig.height=4, fig.width=9}
 library(rpart)
-rpart = rpart(class ~ ., data = training)
+rpart = rpart(class ~ ., data = train1)
 plot(rpart)
 text(rpart)
 ```
 
-```{r fig.height=4, fig.width=5}
+```{r fig.height=4, fig.width=9}
 library(partykit)
 plot(as.party(rpart))
 ```
 
 ```{r}
-rpart.pred = predict(rpart, newdata = testing, type = "class")
-table(rpart.pred, testing$class, dnn = c("Prediction", "Actual"))
+regtree = function(training, testing){
+  rpart = rpart(class ~ ., data = training)
+  rpart.pred = predict(rpart, newdata = testing, type = "class")
+  tn = table(rpart.pred, testing$class, dnn = c("Prediction", "Actual"))[1,1]
+  tp = table(rpart.pred, testing$class, dnn = c("Prediction", "Actual"))[2,2]
+  accuracy = (tn + tp)/nrow(testing)
+  return (accuracy)
+}
+
 ```
 
+
 ```{r}
-# Probability of Success
-(108+77)/(108+77+11+9)
+regtree_df = data.frame(accuracy = c(regtree(train1, test1), regtree(train2, test2), regtree(train3, test3), regtree(train4, test4), regtree(train5, test5), regtree(train6, test6), regtree(train7, test7), regtree(train8, test8), regtree(train9, test9), regtree(train10, test10)), 
+           ml_algorithm = rep("RTree", 5))
+
+regtree_df
 ```
 
 
 ## TREATMENT: Level 4 Naive Bayes
 
-```{r}
-library(e1071)
-```
 
-```{r}
-nb =naiveBayes(class ~ ., data=training)
-print(nb)
-```
-
-```{r}
-printALL=function(model){
-  trainPred=predict(model, newdata = training, type = "class")
-  trainTable=table(training$class, trainPred)
-  testPred=predict(nb, newdata=testing, type="class")
-  testTable=table(testing$class, testPred)
-  trainAcc=(trainTable[1,1]+trainTable[2,2])/sum(trainTable)
-  testAcc=(testTable[1,1]+testTable[2,2])/sum(testTable)
-  message("Contingency Table for Training Data")
-  print(trainTable)
-  message("Contingency Table for Test Data")
-  print(testTable)
-  message("Accuracy")
-  print(round(cbind(trainAccuracy=trainAcc, testAccuracy=testAcc),3))
-}
-printALL(nb)
-```
-
-
-
-A more simple and elegant method?
 ```{r}
 library(naivebayes)
 ```
 
+
 ```{r}
-new_nb = naive_bayes(class ~ .,usekernel=T, data=training)
-printALL(new_nb)
+nBayes = function(training, testing){
+  nb = naive_bayes(class ~ .,usekernel=T, data=training)
+  nb.pred=predict(nb, newdata = testing, type="class")
+  tn = table(nb.pred, testing$class, dnn = c("Prediction", "Actual"))[1,1]
+  tp = table(nb.pred, testing$class, dnn = c("Prediction", "Actual"))[2,2]
+  accuracy = (tn + tp)/nrow(testing)
+  return (accuracy)
+}
+```
+
+```{r}
+nbayes_df = data.frame(accuracy = c(nBayes(train1, test1), nBayes(train2, test2), nBayes(train3, test3), nBayes(train4, test4), nBayes(train5, test5), nBayes(train6, test6), nBayes(train7, test7), nBayes(train8, test8), nBayes(train9, test9), nBayes(train10, test10)), 
+           ml_algorithm = rep("nBayes", 5))
+
+nbayes_df
 ```
 
 ## TREATMENT: Level 5 Support Vector Machines
-
-```{r}
-plot(training)
-```
 
 
 ```{r}
 # Fitting SVM to the Training set 
 library(e1071) 
-  
-svm_fit = svm(formula = class ~ ., 
-                 data = training, 
-                 type = 'C-classification', 
-                 kernel = 'linear') 
 ```
 
-```{r}
-svm_pred = predict(svm_fit, newdata = testing) 
-```
 
 ```{r}
-cm = table(testing[,5], svm_pred) 
-cm
+svm_func = function(train, testing){
+  # svm_fit = svm(formula = class ~ ., data = training, type = 'C-classification', kernel = 'linear')
+  training = train
+  svm_fit = svm(formula = class ~ ., data = training, kernel = "linear")
+  svm.pred = predict(svm_fit, newdata = testing, type = "class") 
+  tn = table(svm.pred, testing$class, dnn = c("Prediction", "Actual"))[1,1]
+  tp = table(svm.pred, testing$class, dnn = c("Prediction", "Actual"))[2,2]
+  # tn = table(testing[,5], svm_pred)[1,1]
+  # tp = table(testing[,5], svm_pred)[2,2]
+  accuracy = (tn + tp)/nrow(testing)
+  return (accuracy)
+}
+```
+
+
+```{r}
+svm_df = data.frame(accuracy = c(svm_func(train1, test1), svm_func(train2, test2), svm_func(train3, test3), svm_func(train4, test4), svm_func(train5, test5), svm_func(train6, test6), svm_func(train7, test7), svm_func(train8, test8), svm_func(train9, test9), svm_func(train10, test10)), 
+           ml_algorithm = rep("SVM", 5))
+
+svm_df
 ```
 
 ```{r }
-plot(svm_fit, training, variance ~ skew)
+#plot(svm_fit, train1, variance ~ skew)
 ```
 
 ```{r}
-plot(svm_fit, training, kurtosis ~ entropy)
+#plot(svm_fit, train1, kurtosis ~ entropy)
+```
+
+```{r}
+# FINAL DATASET OF EACH MODEL'S ACCURACY
+
+models_df = rbind(logreg_df, lda_df, regtree_df, nbayes_df, svm_df)
+models_df
+```
+
+```{r}
+# SET DATAFRAME DATATYPE AS NUMERIC AND FACTOR
+models_df$accuracy = as.numeric(models_df$accuracy)
+models_df$ml_algorithm = as.factor(models_df$ml_algorithm)
+models_df
+```
+
+```{r}
+library(RColorBrewer)
+boxplot(accuracy~ml_algorithm, xlab="ml_algorithm", ylab="Accuracy", main="Comparision of Accuracy of Machine Learning Models",data=models_df, col = brewer.pal(6, "Spectral"))
+```
+
+# 6. ANOVA Summary
+
+```{r}
+ml_anova = aov(accuracy~ml_algorithm,data=models_df)
+summary(ml_anova)
+```
+
+```{r}
+tapply(models_df$accuracy,models_df$ml_algorithm, mean)
+```
+
+```{r}
+tapply(models_df$accuracy,models_df$ml_algorithm, sd)
+```
+
+**Conclusion**
+Results of analysis are reported as follows: Mean (standard deviation) of machine learning models for logistic regression, linear discriminant analysis, regression tree, naive bayes and support vector machine are 0.989(0.006), 0.9777(0.010), 0.9660(0.0115), 0.9124(0.0122), 0.985(0.0085) respectively. Analysis of variance indicates that at 5% level of significance there is sufficient evidence (F(4,45)=97.47, P= < 2x10^-16) to conclude that average accuracy of machine learning models is not the same across model types.
+
+
+## ANOVA Assumptions
+
+```{r fig.height = 4, fig.width= 5}
+opar <- par(mfrow=c(2,2),cex=.8)
+plot(ml_anova)
+```
+
+```{r}
+tapply(models_df$accuracy,models_df$ml_algorithm, mean)
 ```
 
 
 ```{r}
-# # installing library ElemStatLearn 
-# library(ElemStatLearn) 
-#   
-# # Plotting the training data set results 
-# set = training
-# X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.01) 
-# X2 = seq(min(set[, 2]) - 1, max(set[, 2]) + 1, by = 0.01) 
-# # X3 = seq(min(set[, 3]) - 1, max(set[, 3]) + 1, by = 0.01) 
-# # X4 = seq(min(set[, 4]) - 1, max(set[, 4]) + 1, by = 0.01) 
-#   
-# grid_set = expand.grid(X1, X2) 
-# colnames(grid_set) = c('variance', 'skew') 
-# y_grid = predict(svm, newdata = grid_set) 
-#   
-# plot(set[, -3:-5], 
-#      main = 'SVM (Training set)', 
-#      xlab = 'variance', ylab = 'skew', 
-#      xlim = range(X1), ylim = range(X2)) 
-#   
-# contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE) 
-#   
-# points(grid_set, pch = '.', col = ifelse(y_grid == 1, 'coral1', 'aquamarine')) 
-#   
-# points(set, pch = 21, bg = ifelse(set[, 3] == 1, 'green4', 'red3')) 
+tapply(models_df$accuracy,models_df$ml_algorithm, sd)
 ```
+
+Results of analysis are reported as follows: Mean (standard deviation) of machine learning models for logistic regression, linear discriminant analysis, regression tree, naive bayes and support vector machine are 0.989(0.006), 0.9777(0.010), 0.9660(0.0115), 0.9124(0.0122), 0.985(0.0085) respectively. Analysis of variance indicates that at 5% level of significance there is sufficient evidence (F(4,45)=97.47, P= < 2x10^-16) to conclude that average accuracy of machine learning models is not the same across model types.
+
+
+```{r}
+# follow through from above
+# comparing residuals and fitted values of anova
+ml_res <-residuals(ml_anova)
+ml_pre <-predict(ml_anova)
+
+data.frame(models_df,ml_pre,ml_res)
+```
+
+```{r fig.height=9, fig.width=7}
+# Check for Normality of Residuals using Histogram and Boxplot
+par(mfrow=c(2,2))
+hist(ml_res, xlab="Residuals: ANOVA for Machine Learning Models ", main="Histogram of
+Residuals")
+boxplot(ml_res, ylab="Residuals: ANOVA for Machine Learning Models", main="Boxplot of Residuals")
+```
+
+```{r}
+shapiro.test(ml_res)
+```
+
+# Need to change this once normality is satisfied later!
+In qqplot not all points are close to the expected line, indicative of some departure from normality and P value for Shapiro Wilks test is high (P=0.7921) so there is normality observed here. Next we check for equality of variance of residuals.
+
+```{r}
+#Check for equality of variance
+plot(ml_res,ml_pre,xlab = "Residuals",ylab = "Predicted Values")
+```
+
+```{r}
+library(car)
+bartlett.test(accuracy ~ ml_algorithm,data=models_df)
+```
+
+```{r}
+leveneTest(ml_anova)
+```
+
+Plot of residuals against predicted values does not show any unusual pattern (funneling or
+bow shape). As normality was valid, Bartlett test results are reliable. Bartlett test lead to high P-value
+(P=0.3147), indicating equality of variance in residuals across factor levels (homogeneity). Levene’s test also leads to the similar result but with slightly higher p-value (p = 0.5845).
+
+Finally, as the order experiment was random with reference to each factor level setting, independence of errors can be assumed. All underlying anova assumptions are satisfied.
+
+# 7. Comparing Models
+
+```{r}
+tapply(models_df$accuracy,models_df$ml_algorithm, mean)
+```
+
+```{r}
+tapply(models_df$accuracy,models_df$ml_algorithm, sd)
+```
+
+**Results of analysis of mean are reported as follows:** Mean (standard deviation) of machine learning models for logistic regression, linear discriminant analysis, regression tree, naive bayes and support vector machine are 0.989(0.006), 0.9777(0.010), 0.9660(0.0115), 0.9124(0.0122), 0.985(0.0085) respectively. 
+
+
+# 8. Multiple Comparisons
+
+## Fishers Least Significant Difference Test (Fisher's LSD)
+
+```{r}
+library(agricolae)
+MComLSD=LSD.test(ml_anova,"ml_algorithm");MComLSD
+```
+
+## Tukey's Studentised Range Test
+
+```{r}
+MComTukey=HSD.test(ml_anova,"ml_algorithm");MComTukey
+```
+
+## Duncan's Test
+```{r}
+#Use first treatment(alphanumerically)as control
+library(multcomp)
+
+MComScheffe=glht(ml_anova,Linfct=mcp(Treatment="Dunnett"))
+summary(MComScheffe)
+```
+
+```{r}
+# I dont rly get this amanda <3
+##Posthoc Scheffe test
+library(DescTools)
+ScheffeTest(ml_anova,which="ml_algorithm", contrasts = c(-4,1,1,1,1))
+```
+
+## Pairwise T-tests using Bonferroni and Holm
+
+```{r}
+accuracy=models_df$accuracy
+ml_algorithm=models_df$ml_algorithm
+
+MComBonferroni=pairwise.t.test(accuracy,ml_algorithm,p.adjust="bonferroni");MComBonferroni
+```
+
+```{r}
+attach(models_df)
+MComPairwise=pairwise.t.test(accuracy,ml_algorithm);MComPairwise
+```
+
+# RESULT PLOTTING
+
+
+```{r}
+library(ggplot2)
+p = ggplot(models_df, aes(ml_algorithm, accuracy, fill=ml_algorithm))
+p + geom_boxplot(width=0.5) + geom_jitter(width = 0.01, colour = 'lightsteelblue4', alpha=0.3) + scale_fill_brewer(palette = "Spectral") + ggtitle("Boxplot of Machine Learning Algorithm's Accuracy")
+```
+
 
